@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import StratifiedShuffleSplit
 from pandas.plotting import scatter_matrix
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelBinarizer
 import numpy as np
 import os
 
@@ -102,3 +106,87 @@ if __name__ == '__main__':
     housing.plot(kind="scatter", x="median_income", y="median_house_value",
                  alpha=0.1)
     # plt.show() PDF page: 108 (where i left off )
+
+    housing = strat_train_set.drop("median_house_value", axis=1) # drop creates
+    # a copy without affecting strat_train_set
+
+    housing_labels = strat_train_set["median_house_value"].copy()
+
+    # total_bedrooms attribute has some missing values, so let’s fix this.
+    # We have three options:
+    # Get rid of the corresponding districts.
+    # Get rid of the whole attribute.
+    # Set the values to some value (zero, the mean, the median, etc.).
+
+    # Scikit learn has good class for handling missing values: The Imputer.
+    imputer = SimpleImputer(strategy="median")
+
+    # Since the median can only be computed on numerical attributes, we need to
+    # create a copy of the data without the text attribute ocean_proximity:
+    # - Aurelien Geron (pdf pg. 110)
+    housing_num = housing.drop("ocean_proximity", axis=1)
+
+    # Now you can fit the imputer instance to the training data using the fit()
+    # method:
+    imputer.fit(housing_num)
+
+    # >>> imputer.statistics_
+    # array([-118.51  ,   34.26  ,   29.    , 2119.5   ,  433.    , 1164.    ,
+    #         408.    ,    3.5409])
+
+    # >>> housing_num.median().values
+    # array([-118.51  ,   34.26  ,   29.    , 2119.5   ,  433.    , 1164.    ,
+    #         408.    ,    3.5409])
+
+    # Now you can use this “trained” imputer to transform the training set by
+    # replacing missing values by the learned medians
+    X = imputer.transform(housing_num)
+    # The result is a plain Numpy array containing the transformed features. If you
+    # want to put it back into a Pandas DataFrame, it’s simple:
+
+    housing_tr = pd.DataFrame(X, columns=housing_num.columns)
+
+    # Handling Text (ocean proximity)
+    # Scikit-Learn provides a transformer for this task called LabelEncoder
+    encoder = LabelEncoder()
+    housing_cat = housing["ocean_proximity"]
+    housing_cat_encoded = encoder.fit_transform(housing_cat)
+
+    # >>> housing_cat_encoded
+    # array([0, 0, 4, ..., 1, 0, 3])
+    # >>> print(encoder.classes_)
+    # ['<1H OCEAN' 'INLAND' 'ISLAND' 'NEAR BAY' 'NEAR OCEAN']
+
+    # Let’s encode the categories as one-hot vectors. Note
+    # that fit_transform() expects a 2D array, but housing_cat_encoded is a 1D
+    # array, so we need to reshape it:
+    encoder = OneHotEncoder()
+    housing_cat_1hot = encoder.fit_transform(housing_cat_encoded.reshape(-1,1))
+    # output is a sparse matrix (saves data by not using zeros)
+    # to convert use to_array() to make normal numpy array...
+
+    encoder = LabelBinarizer()
+    housing_cat_1hot = encoder.fit_transform(housing_cat)
+
+    # >>> housing_cat_1hot
+    # array([[1, 0, 0, 0, 0],
+    #    [1, 0, 0, 0, 0],
+    #    [0, 0, 0, 0, 1],
+    #    ...,
+    #    [0, 1, 0, 0, 0],
+    #    [1, 0, 0, 0, 0],
+    #    [0, 0, 0, 1, 0]])
+
+# From book:
+#     Standardization is quite different: first it subtracts the mean value (so
+# standardized values always have a zero mean), and then it divides by the
+# variance so that the resulting distribution has unit variance. Unlike min-max
+# scaling, standardization does not bound values to a specific range, which may be
+# a problem for some algorithms (e.g., neural networks often expect an input value
+# ranging from 0 to 1). However, standardization is much less affected by outliers.
+# For example, suppose a district had a median income equal to 100 (by mistake).
+# Min-max scaling would then crush all the other values from 0–15 down to 0–
+# 0.15, whereas standardization would not be much affected. Scikit-Learn provides
+# a transformer called StandardScaler for standardization.
+
+# left off at page 117
